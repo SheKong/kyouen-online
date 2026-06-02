@@ -1,0 +1,6 @@
+{
+  "name": "共圆对战",
+  "description": "“共圆”在线对弈与复盘小游戏。支持创建房间、步时与总读秒规则、双人在线对折、实时聊天、倒计时、一键“共圆”宣言检测以及完整对局复盘（绘制所有共圆组合）。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

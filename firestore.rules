@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Make rules completely open to allow frictionless client-session UUID matching in the preview environment
+    match /rooms/{roomId} {
+      allow read, write, delete: if true;
+
+      match /messages/{messageId} {
+        allow read, write, delete: if true;
+      }
+    }
+  }
+}

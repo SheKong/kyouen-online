@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Game Room",
+      "description": "Represents an online 共圆 matchmaking and match room containing players, configs, turns, live timers, and move histories.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique ID of the room." },
+        "name": { "type": "string", "description": "A customized name for the room." },
+        "size": { "type": "integer", "description": "Board size, e.g., 9 for a 9x9 board." },
+        "stepTime": { "type": "integer", "description": "Step limit in seconds, e.g., 60." },
+        "byoyomiTime": { "type": "integer", "description": "Total overtime byoyomi reservoir in seconds, e.g., 60." },
+        "totalLives": { "type": "integer", "description": "Initial number of lives, e.g., 3." },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "playing", "finished"],
+          "description": "The current state of the room."
+        },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." },
+        "players": {
+          "type": "object",
+          "description": "The UIDs of the players assigned to Black (first player) and White (second player)."
+        },
+        "playerNames": {
+          "type": "object",
+          "description": "A dictionary mapping user UID strings to their chosen nicknames."
+        },
+        "playerReady": {
+          "type": "object",
+          "description": "Ready states for Black and White players."
+        },
+        "playerLives": {
+          "type": "object",
+          "description": "Remaining lives for Black and White players."
+        },
+        "playerByoyomi": {
+          "type": "object",
+          "description": "Remaining over-time (byoyomi reservoir) in seconds for Black and White players."
+        },
+        "turn": {
+          "type": "string",
+          "enum": ["black", "white"],
+          "description": "The color whose turn it is to act."
+        },
+        "winner": {
+          "type": "string",
+          "enum": ["black", "white", "null"],
+          "description": "The color that won the match, or null/empty if none."
+        },
+        "lastMoveTime": {
+          "type": "integer",
+          "description": "Epoch timestamp in milliseconds of the last action (play or start)."
+        },
+        "activeDeclaration": {
+          "type": "object",
+          "description": "Tracks concyclic declarations in progress, pause times, and claiming player."
+        },
+        "moves": {
+          "type": "array",
+          "description": "Complete ordered historical line of plays, declarations, results and retraction markers."
+        }
+      },
+      "required": ["id", "size", "stepTime", "byoyomiTime", "totalLives", "status"]
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "A text message sent in the room chat lobby, visible to clients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique message document ID." },
+        "senderId": { "type": "string", "description": "UID of the sending user." },
+        "senderName": { "type": "string", "description": "Display name of the sender." },
+        "text": { "type": "string", "description": "Content of the text message." },
+        "role": { "type": "string", "enum": ["black", "white", "spectator"], "description": "The sender's game role." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when sent." }
+      },
+      "required": ["id", "senderId", "senderName", "text", "role"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Retrieve or update a specific game room."
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Subcollection of chat messages belonging to this room."
+    }
+  }
+}
