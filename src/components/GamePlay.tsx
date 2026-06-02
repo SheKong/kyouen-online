@@ -19,7 +19,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const [chatInput, setChatInput] = useState('');
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const [selectedDeclarationPoints, setSelectedDeclarationPoints] = useState<Point[]>([]);
-  const [declaring, setDeclaring] = useState(false);
+  const declaring = room?.activeDeclaration?.player === myRole.color;
 
   const [savedAnalysisByStep, setSavedAnalysisByStep] = useState<Record<number, ConcyclicGroup[]>>({});
   const concyclicGroups = savedAnalysisByStep[historyIndex] || [];
@@ -132,7 +132,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
   // 4. Timer Tick Effect
   useEffect(() => {
-    if (!room || room.status !== 'playing' || room.winner) {
+    if (!room || room.status !== 'playing' || room.winner || room.activeDeclaration) {
       return;
     }
 
@@ -461,7 +461,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     }
 
     // Set declaration state
-    setDeclaring(true);
     setSelectedDeclarationPoints([]);
 
     const roomRef = doc(db, 'rooms', roomId);
@@ -481,11 +480,11 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     if (room.activeDeclaration.player !== myRole.color) return;
 
     try {
-      setDeclaring(false);
       setSelectedDeclarationPoints([]);
 
       await updateDoc(doc(db, 'rooms', roomId), {
-        activeDeclaration: null
+        activeDeclaration: null,
+        lastMoveTime: room.lastMoveTime + (Date.now() - room.activeDeclaration.startedAt)
       });
 
       await postSystemChat(`${nickname} 取消了共圆宣言。`);
@@ -573,7 +572,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
           await postSystemChat(`宣言成功！四点共圆成立。${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，上一步落子 (${p1.x+1}, ${p1.y+1}) 被移除，由 ${nickname} 继续落子。`);
         }
 
-        setDeclaring(false);
         setSelectedDeclarationPoints([]);
         await updateDoc(roomRef, updates);
       } else {
@@ -592,7 +590,8 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         const updates: any = {
           activeDeclaration: null,
           [`playerLives.${myRole.color!}`]: updatedMyLives,
-          moves: [...room.moves, newFailMove]
+          moves: [...room.moves, newFailMove],
+          lastMoveTime: room.lastMoveTime + (Date.now() - room.activeDeclaration.startedAt)
         };
 
         if (isGameOver) {
@@ -604,7 +603,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
           await postSystemChat(`宣言失败，四点不共圆。${myRole.color === 'black' ? '黑方' : '白方'}损失1点生命，交回行棋权。`);
         }
 
-        setDeclaring(false);
         setSelectedDeclarationPoints([]);
         await updateDoc(roomRef, updates);
       }
