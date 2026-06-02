@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, setDoc, doc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, setDoc, doc, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Room } from '../types';
 import { getOrCreateUserId, getOrCreateNickname, saveNickname } from '../utils/userId';
@@ -26,13 +26,29 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [joinError, setJoinError] = useState('');
 
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+
   // Listen to active rooms
   useEffect(() => {
     const roomsQuery = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(roomsQuery, (snapshot) => {
       const roomList: Room[] = [];
+      const now = Date.now();
+      const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes
+
       snapshot.forEach((docSnap) => {
-        roomList.push(docSnap.data() as Room);
+        const r = docSnap.data() as Room;
+        const lastActive = r.lastMoveTime || r.createdAt || 0;
+        
+        // Clean up stale or inactive rooms to prevent ghosts when players close the tab directly
+        if (now - lastActive > INACTIVITY_LIMIT) {
+          try {
+            deleteDoc(doc(db, 'rooms', r.id)).catch(() => {});
+          } catch (e) { }
+          return;
+        }
+        
+        roomList.push(r);
       });
       setRooms(roomList);
       setLoading(false);
@@ -58,6 +74,9 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingRoom) return;
+    setIsCreatingRoom(true);
+    
     const cleanRoomName = roomName.trim() || `${nickname}的房间`;
     const newRoomId = generateRoomCode();
 
@@ -101,6 +120,9 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
       onJoinRoom(newRoomId);
     } catch (err) {
       console.error('Error creating room:', err);
+    } finally {
+      // Small cooldown to prevent rapid spamming even after success/failure
+      setTimeout(() => setIsCreatingRoom(false), 500);
     }
   };
 
@@ -439,9 +461,10 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
               <button
                 id="submit-create-room"
                 type="submit"
-                className="w-full bg-black hover:bg-neutral-850 text-white text-xs font-black tracking-widest uppercase py-4 border-2 border-black transition-all shadow-[4px_4px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer flex items-center justify-center gap-1.5"
+                disabled={isCreatingRoom}
+                className={`w-full text-white text-xs font-black tracking-widest uppercase py-4 border-2 border-black transition-all shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5 ${isCreatingRoom ? 'bg-neutral-600 cursor-not-allowed opacity-80' : 'bg-black hover:bg-neutral-800 active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer'}`}
               >
-                <Plus size={14} className="stroke-[3]" /> 创建对弈新屋 LAUNCH
+                <Plus size={14} className="stroke-[3]" /> {isCreatingRoom ? 'CREATING...' : '创建对弈新屋 LAUNCH'}
               </button>
             </form>
           </div>

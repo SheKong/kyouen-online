@@ -191,39 +191,34 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
     try {
       const roomRef = doc(db, 'rooms', roomId);
-
-      // Case 1: Game hasn't started or is finished, and we exit
-      if (room.status === 'waiting' || room.status === 'finished') {
-        const updates: any = {};
-        if (room.players.black === userId) {
-          updates['players.black'] = null;
-          updates['playerReady.black'] = false;
-        } else if (room.players.white === userId) {
-          updates['players.white'] = null;
-          updates['playerReady.white'] = false;
-        }
-
-        // If both slots will be empty, delete room
-        const willBeBlackEmpty = room.players.black === userId ? true : !room.players.black;
-        const willBeWhiteEmpty = room.players.white === userId ? true : !room.players.white;
-
-        if (willBeBlackEmpty && willBeWhiteEmpty) {
-          await deleteDoc(roomRef);
-        } else {
-          await updateDoc(roomRef, updates);
-        }
+      const updates: any = {};
+      
+      let wasPlayer = false;
+      if (room.players.black === userId) {
+        updates['players.black'] = null;
+        updates['playerReady.black'] = false;
+        wasPlayer = true;
       }
-      // Case 2: Game is active & one player leaves -> dissolve / finish the room
-      else if (room.status === 'playing' && myRole.isPlayer) {
-        // Opponent automatically wins
-        const opponentColor = myRole.color === 'black' ? 'white' : 'black';
-        await updateDoc(roomRef, {
-          status: 'finished',
-          winner: opponentColor,
-          winnerReason: '对方退出对局导致游戏结束'
-        });
-        // Wait, the rule says "如果对局进行中游玩位有任何1人退出房间自动解散", so we delete it after a small break or delete it right away
+      if (room.players.white === userId) {
+        updates['players.white'] = null;
+        updates['playerReady.white'] = false;
+        wasPlayer = true;
+      }
+
+      if (room.status === 'playing' && wasPlayer) {
+        const opponentColor = room.players.black === userId ? 'white' : 'black';
+        updates.status = 'finished';
+        updates.winner = opponentColor;
+        updates.winnerReason = '对方退出房间导致游戏结束';
+      }
+
+      const willBeBlackEmpty = room.players.black === userId ? true : !room.players.black;
+      const willBeWhiteEmpty = room.players.white === userId ? true : !room.players.white;
+
+      if (willBeBlackEmpty && willBeWhiteEmpty) {
         await deleteDoc(roomRef);
+      } else if (Object.keys(updates).length > 0) {
+        await updateDoc(roomRef, updates);
       }
 
       onExit();
@@ -1210,7 +1205,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
           </div>
 
           {/* Show All Concyclic Panel (For Post game Review & Analysis) */}
-          {(isEndState || historyIndex !== room.moves.length) && (
+          {isEndState && (
             <div className="w-full max-w-[500px]">
               <div className="bg-white border-2 border-black p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
                 <div className="flex justify-between items-center mb-3">
