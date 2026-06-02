@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, setDoc, doc, orderBy, deleteDoc } from '
 import { db } from '../firebase';
 import { Room } from '../types';
 import { getOrCreateUserId, getOrCreateNickname, saveNickname } from '../utils/userId';
-import { Plus, User, Play, Eye, Flame, Clock, Hash, Check, RefreshCw } from 'lucide-react';
+import { Plus, User, Play, Eye, Flame, Clock, Hash, Check, RefreshCw, HelpCircle, X } from 'lucide-react';
 
 interface LobbyProps {
   onJoinRoom: (roomId: string) => void;
@@ -13,6 +13,7 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
   const [userId] = useState(() => getOrCreateUserId());
   const [nickname, setNickname] = useState(() => getOrCreateNickname());
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -190,10 +191,57 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
               >
                 [修改/EDIT]
               </button>
+              <button
+                id="show-rules"
+                onClick={() => setShowRules(true)}
+                title="游戏规则"
+                className="text-neutral-500 hover:text-black cursor-pointer bg-neutral-100 hover:bg-neutral-200 rounded-full p-1 transition-colors ml-2"
+              >
+                <HelpCircle size={14} className="stroke-[2.5]" />
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Rules Modal Overlay */}
+      {showRules && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white border-2 border-black p-6 md:p-8 max-w-lg w-full shadow-[8px_8px_0px_rgba(0,0,0,1)] relative">
+            <button
+              onClick={() => setShowRules(false)}
+              className="absolute top-4 right-4 p-1 hover:bg-neutral-100 cursor-pointer text-black"
+            >
+              <X size={20} className="stroke-[3]" />
+            </button>
+            <h2 className="text-xl font-black uppercase tracking-widest text-black flex items-center gap-2 mb-6">
+              <HelpCircle size={22} className="stroke-[3]" />
+              游戏规则 RULES
+            </h2>
+            <div className="space-y-4 text-sm font-medium text-neutral-700 leading-relaxed font-sans">
+              <p>
+                「共圆」是一款基于四点共圆几何原理的二人智力对弈游戏。
+              </p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li><strong className="text-black">目标：</strong>尽可能消耗对方的生命点数。</li>
+                <li><strong className="text-black">落子：</strong>黑白双方轮流在网格交叉点上落子，任何落子不得重叠。</li>
+                <li><strong className="text-black">共圆宣告：</strong>当对方落子后，若你发现该子与棋盘上<strong>任意颜色</strong>的其他三个子构成了“四点共圆”，你可以在你的回合点击“共圆！”进行宣告。</li>
+                <li><strong className="text-black">奖惩机制：</strong>宣告成功，则扣除对方1点生命值，并移除对方上一步的落子，由你继续走棋。若宣告失败（选错或不存在），则扣除你的1点生命值！</li>
+                <li><strong className="text-black">时间限制：</strong>每回合有固定的思考时间，若思考时间耗尽则进入读秒，读秒耗尽将失去1点生命值。</li>
+              </ul>
+              <p className="pt-2 text-xs font-bold text-black border-t-2 border-black italic">
+                “保持敏锐的几何直觉，不要错过任何一个共圆的瞬间！”
+              </p>
+            </div>
+            <button
+              onClick={() => setShowRules(false)}
+              className="mt-8 w-full bg-black text-white font-black py-3 text-xs tracking-widest uppercase hover:bg-neutral-800 transition-colors shadow-[3px_3px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:translate-x-0.5 active:shadow-none"
+            >
+              明白 UNDERSTOOD
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Rooms List & Setup Board */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

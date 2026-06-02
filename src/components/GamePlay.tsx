@@ -21,12 +21,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const [selectedDeclarationPoints, setSelectedDeclarationPoints] = useState<Point[]>([]);
   const [declaring, setDeclaring] = useState(false);
 
-  useEffect(() => {
-    if (room && !room.activeDeclaration && declaring) {
-      setDeclaring(false);
-      setSelectedDeclarationPoints([]);
-    }
-  }, [room?.activeDeclaration, declaring]);
   const [savedAnalysisByStep, setSavedAnalysisByStep] = useState<Record<number, ConcyclicGroup[]>>({});
   const concyclicGroups = savedAnalysisByStep[historyIndex] || [];
   const showAllConcyclic = savedAnalysisByStep[historyIndex] !== undefined;
@@ -414,9 +408,12 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   // Timeout handler
   const handleTimeout = async (timedOutPlayer: PlayerColor) => {
     if (!room || room.status !== 'playing' || room.winner) return;
-
-    // Opponent details
+    
     const opponentColor = timedOutPlayer === 'black' ? 'white' : 'black';
+    // To prevent duplicate timeout triggers from multiple clients, only the opponent is authorized to enforce the timeout.
+    // If the opponent is disconnected, the timeout will be enforced as soon as they reconnect.
+    if (myRole.color !== opponentColor) return;
+
     const updatedLives = Math.max(0, room.playerLives[timedOutPlayer] - 1);
 
     const isGameOver = updatedLives === 0;
