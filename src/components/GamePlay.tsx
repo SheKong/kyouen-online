@@ -624,6 +624,8 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     try {
       const roomRef = doc(db, 'rooms', roomId);
       await updateDoc(roomRef, {
+        'players.black': room.players.white,
+        'players.white': room.players.black,
         status: 'waiting',
         playerReady: {
           black: false,
@@ -647,7 +649,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
       setHistoryIndex(0);
       setSavedAnalysisByStep({});
-      await postSystemChat(`重新开局！双方重新进入备战状态。`);
+      await postSystemChat(`重新开局！双方已交换黑白方，重新进入备战状态。`);
     } catch (err) {
       console.error('Error resetting game room:', err);
     }
