@@ -20,6 +20,13 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const [selectedDeclarationPoints, setSelectedDeclarationPoints] = useState<Point[]>([]);
   const [declaring, setDeclaring] = useState(false);
+
+  useEffect(() => {
+    if (room && !room.activeDeclaration && declaring) {
+      setDeclaring(false);
+      setSelectedDeclarationPoints([]);
+    }
+  }, [room?.activeDeclaration, declaring]);
   const [savedAnalysisByStep, setSavedAnalysisByStep] = useState<Record<number, ConcyclicGroup[]>>({});
   const concyclicGroups = savedAnalysisByStep[historyIndex] || [];
   const showAllConcyclic = savedAnalysisByStep[historyIndex] !== undefined;
@@ -131,7 +138,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
   // 4. Timer Tick Effect
   useEffect(() => {
-    if (!room || room.status !== 'playing' || room.winner || room.activeDeclaration) {
+    if (!room || room.status !== 'playing' || room.winner) {
       return;
     }
 
@@ -427,17 +434,17 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         [`playerLives.${timedOutPlayer}`]: updatedLives,
         [`playerByoyomi.${timedOutPlayer}`]: room.byoyomiTime, // Refresh byoyomi reservoir
         lastMoveTime: Date.now(),
-        moves: [...room.moves, timeoutMove]
+        moves: [...room.moves, timeoutMove],
+        activeDeclaration: null
       };
 
       if (isGameOver) {
         updates.status = 'finished';
         updates.winner = opponentColor;
-        updates.winnerReason = '由于对方时间用尽（超时判负）而获胜';
-        await postSystemChat(`时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}超时损失最后一颗生命值。游戏结束！${opponentColor === 'black' ? '黑方' : '白方'}获胜！`);
+        updates.winnerReason = '对方超时';
+        await postSystemChat(`时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}生命值耗尽，游戏结束，${opponentColor === 'black' ? '黑方' : '白方'}获胜。`);
       } else {
-        // Keeps same player turn! Timeout deducts life and refreshes clock, but they still have to play.
-        await postSystemChat(`时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}每步限时与读秒耗尽，失去 1 点生命。重置读秒，请尽快落子！`);
+        await postSystemChat(`超时！${timedOutPlayer === 'black' ? '黑方' : '白方'}失去 1 点生命，重置读秒。`);
       }
 
       await updateDoc(roomRef, updates);
@@ -460,17 +467,15 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     setDeclaring(true);
     setSelectedDeclarationPoints([]);
 
-    // Pause the timer via writing activeDeclaration state to Firestore
     const roomRef = doc(db, 'rooms', roomId);
     updateDoc(roomRef, {
       activeDeclaration: {
         player: myRole.color,
-        startedAt: Date.now(),
-        prevLastMoveTime: room.lastMoveTime
+        startedAt: Date.now()
       }
     }).catch(err => console.error('Error starting declaration:', err));
 
-    postSystemChat(`[共圆宣言] ${nickname} 发起了“共圆！”宣言！计时暂停。`);
+    postSystemChat(`[共圆宣言] ${nickname} 发起了“共圆！”宣言！`);
   };
 
   // Cancel declaration
@@ -482,16 +487,11 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
       setDeclaring(false);
       setSelectedDeclarationPoints([]);
 
-      // Calculator to restore elapsed clock
-      const totalElapsedBeforePause = room.activeDeclaration.startedAt - room.activeDeclaration.prevLastMoveTime;
-      const resumedLastMoveTime = Date.now() - totalElapsedBeforePause;
-
       await updateDoc(doc(db, 'rooms', roomId), {
-        activeDeclaration: null,
-        lastMoveTime: resumedLastMoveTime
+        activeDeclaration: null
       });
 
-      await postSystemChat(`${nickname} 取消了共圆宣言。计时恢复，回到落子决策中。`);
+      await postSystemChat(`${nickname} 取消了共圆宣言。`);
     } catch (err) {
       console.error('Error cancelling declaration:', err);
     }
@@ -570,10 +570,10 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         if (isGameOver) {
           updates.status = 'finished';
           updates.winner = myRole.color;
-          updates.winnerReason = '通过精准的 [共圆宣言] 扣除对方最后一滴生命值获胜';
-          await postSystemChat(`宣言成功！四点 (${p1.x+1}, ${p1.y+1}), (${p2.x+1}, ${p2.y+1}), (${p3.x+1}, ${p3.y+1}), (${p4.x+1}, ${p4.y+1}) 处于共圆上！${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，生命值为0。游戏结束！${myRole.color === 'black' ? '黑方' : '白方'}在共圆宣告中大获全胜！`);
+          updates.winnerReason = '共圆宣言成功';
+          await postSystemChat(`宣言成功！四点 (${p1.x+1}, ${p1.y+1}), (${p2.x+1}, ${p2.y+1}), (${p3.x+1}, ${p3.y+1}), (${p4.x+1}, ${p4.y+1}) 共圆。${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，生命值为0。游戏结束，${myRole.color === 'black' ? '黑方' : '白方'}获胜。`);
         } else {
-          await postSystemChat(`宣言成功！四点共圆成立！${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，上一步落子 (${p1.x+1}, ${p1.y+1}) 被移除，返还行棋权由 ${nickname} 继续落子！`);
+          await postSystemChat(`宣言成功！四点共圆成立。${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，上一步落子 (${p1.x+1}, ${p1.y+1}) 被移除，由 ${nickname} 继续落子。`);
         }
 
         setDeclaring(false);
@@ -592,24 +592,19 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
           createdAt: Date.now()
         };
 
-        // Resumes timing elapsed, and we must still make a standard move as regular turn
-        const totalElapsedBeforePause = room.activeDeclaration.startedAt - room.activeDeclaration.prevLastMoveTime;
-        const resumedLastMoveTime = Date.now() - totalElapsedBeforePause;
-
         const updates: any = {
           activeDeclaration: null,
           [`playerLives.${myRole.color!}`]: updatedMyLives,
-          lastMoveTime: resumedLastMoveTime,
           moves: [...room.moves, newFailMove]
         };
 
         if (isGameOver) {
           updates.status = 'finished';
           updates.winner = opponentColor;
-          updates.winnerReason = '由于对方错误的 [共圆宣言] 消耗掉自我最后一手生命数而获胜';
-          await postSystemChat(`宣言失败！指定的4个点并不共圆。${myRole.color === 'black' ? '黑方' : '白方'}损失1点生命，生命值为0。游戏结束！${opponentColor === 'black' ? '黑方' : '白方'}获胜！`);
+          updates.winnerReason = '对方共圆宣言失败';
+          await postSystemChat(`宣言失败，四点不共圆。${myRole.color === 'black' ? '黑方' : '白方'}损失1点生命，生命值为0。游戏结束，${opponentColor === 'black' ? '黑方' : '白方'}获胜。`);
         } else {
-          await postSystemChat(`宣言失败！指定的4个点不处于相同圆周，宣告不属实！${myRole.color === 'black' ? '黑方' : '白方'}损失 1 点生命值，交回行棋决策权并恢复倒计时！`);
+          await postSystemChat(`宣言失败，四点不共圆。${myRole.color === 'black' ? '黑方' : '白方'}损失1点生命，交回行棋权。`);
         }
 
         setDeclaring(false);
@@ -640,9 +635,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         ...prev,
         [historyIndex]: groups
       }));
-      if (groups.length === 0) {
-        alert('复盘报告: 当前盘面未发现任何合法四点共圆组合！');
-      }
     }
   };
 
@@ -1276,7 +1268,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
             <div className="space-y-4">
               {/* Black Player Card */}
               {(() => {
-                const isBlackActive = isPlayState && room.turn === 'black' && !room.activeDeclaration;
+                const isBlackActive = isPlayState && room.turn === 'black';
                 const blackName = getPlayerName(room.players.black);
                 const blackLives = Array.from({ length: room.totalLives }).map((_, i) => i < room.playerLives.black);
 
@@ -1340,7 +1332,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
               {/* White Player Card */}
               {(() => {
-                const isWhiteActive = isPlayState && room.turn === 'white' && !room.activeDeclaration;
+                const isWhiteActive = isPlayState && room.turn === 'white';
                 const whiteName = getPlayerName(room.players.white);
                 const whiteLives = Array.from({ length: room.totalLives }).map((_, i) => i < room.playerLives.white);
 
@@ -1495,9 +1487,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
                           <button
                             id="declare-concyclic-trigger"
                             onClick={handleStartDeclaration}
-                            className="w-full py-3.5 bg-black hover:bg-neutral-800 text-white font-black border-2 border-black transition-all text-[10px] tracking-widest uppercase shadow-[3px_3px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer animate-pulse"
+                            className="w-full py-3.5 bg-black hover:bg-neutral-800 text-white font-black border-2 border-black transition-all text-xs tracking-widest uppercase shadow-[3px_3px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
                           >
-                            🎯 宣布由于上一步致 “共圆！” DECLARE
+                            共圆！
                           </button>
                         )}
                       </div>

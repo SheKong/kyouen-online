@@ -41,14 +41,16 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
         const lastActive = r.lastMoveTime || r.createdAt || 0;
         
         // Clean up stale or inactive rooms to prevent ghosts when players close the tab directly
-        if (now - lastActive > INACTIVITY_LIMIT) {
+        if ((now - lastActive > INACTIVITY_LIMIT) || (!r.players.black && !r.players.white)) {
           try {
             deleteDoc(doc(db, 'rooms', r.id)).catch(() => {});
           } catch (e) { }
           return;
         }
         
-        roomList.push(r);
+        if (r.status !== 'finished') {
+          roomList.push(r);
+        }
       });
       setRooms(roomList);
       setLoading(false);
@@ -199,7 +201,7 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
         <div className="md:col-span-2">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xs uppercase tracking-widest font-extrabold text-black flex items-center gap-3 border-l-4 border-black pl-3">
-              <span>正在等待的房间 WAIT LOBBY</span>
+              <span>等待中的房间 LOBBY</span>
               <span className="border-2 border-black bg-black text-white font-mono text-xs px-2.5 py-0.5 font-bold">
                 {rooms.length}
               </span>
@@ -224,7 +226,7 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
             </div>
           ) : rooms.length === 0 ? (
             <div className="text-center py-20 border-2 border-black border-dashed bg-white shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-              <p className="text-black font-extrabold uppercase tracking-tight text-lg mb-2">暂无正在运行的房间</p>
+              <p className="text-black font-extrabold uppercase tracking-tight text-lg mb-2">暂无开放的房间</p>
               <p className="text-xs text-neutral-500 font-mono mb-6">Create a room and invite your opponent with the Room Code</p>
               <button
                 id="create-room-secondary"
@@ -369,7 +371,7 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
           <div className="border-2 border-black p-5 bg-white shadow-[4px_4px_0px_rgba(0,0,0,1)]">
             <h3 className="font-extrabold uppercase tracking-widest text-black text-xs mb-4 flex items-center gap-2">
               <Plus size={15} className="stroke-[3]" />
-              <span>创建局域对战 CREATE ROOM</span>
+              <span>创建房间 CREATE ROOM</span>
             </h3>
 
             <form onSubmit={handleCreateRoom} className="space-y-4">
@@ -415,10 +417,10 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
                   value={stepTime}
                   onChange={(e) => setStepTime(parseInt(e.target.value))}
                 >
-                  <option value={15}>15 SECONDS (超极速)</option>
-                  <option value={30}>30 SECONDS (快棋)</option>
-                  <option value={60}>60 SECONDS (默认推荐)</option>
-                  <option value={120}>120 SECONDS (中速节奏)</option>
+                  <option value={15}>15 SECONDS</option>
+                  <option value={30}>30 SECONDS</option>
+                  <option value={60}>60 SECONDS</option>
+                  <option value={120}>120 SECONDS</option>
                 </select>
               </div>
 
@@ -430,10 +432,10 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
                   value={byoyomiTime}
                   onChange={(e) => setByoyomiTime(parseInt(e.target.value))}
                 >
-                  <option value={30}>30 SECONDS (极限读秒)</option>
-                  <option value={60}>60 SECONDS (标准备用)</option>
-                  <option value={120}>120 SECONDS (充裕时长)</option>
-                  <option value={180}>180 SECONDS (至高容错)</option>
+                  <option value={30}>30 SECONDS</option>
+                  <option value={60}>60 SECONDS</option>
+                  <option value={120}>120 SECONDS</option>
+                  <option value={180}>180 SECONDS</option>
                 </select>
               </div>
 
@@ -464,7 +466,7 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
                 disabled={isCreatingRoom}
                 className={`w-full text-white text-xs font-black tracking-widest uppercase py-4 border-2 border-black transition-all shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5 ${isCreatingRoom ? 'bg-neutral-600 cursor-not-allowed opacity-80' : 'bg-black hover:bg-neutral-800 active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer'}`}
               >
-                <Plus size={14} className="stroke-[3]" /> {isCreatingRoom ? 'CREATING...' : '创建对弈新屋 LAUNCH'}
+                <Plus size={14} className="stroke-[3]" /> {isCreatingRoom ? 'CREATING...' : '创建新房间 LAUNCH'}
               </button>
             </form>
           </div>
