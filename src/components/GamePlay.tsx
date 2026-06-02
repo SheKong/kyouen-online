@@ -20,8 +20,15 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const [selectedDeclarationPoints, setSelectedDeclarationPoints] = useState<Point[]>([]);
   const [declaring, setDeclaring] = useState(false);
-  const [showAllConcyclic, setShowAllConcyclic] = useState(false);
-  const [concyclicGroups, setConcyclicGroups] = useState<ConcyclicGroup[]>([]);
+  const [savedAnalysisByStep, setSavedAnalysisByStep] = useState<Record<number, ConcyclicGroup[]>>({});
+  const concyclicGroups = savedAnalysisByStep[historyIndex] || [];
+  const showAllConcyclic = savedAnalysisByStep[historyIndex] !== undefined;
+
+  // Reset hover and selected indicators when history index changes
+  useEffect(() => {
+    setHoveredGroupIndex(null);
+    setSelectedGroupIndex(null);
+  }, [historyIndex]);
   const [hoveredGroupIndex, setHoveredGroupIndex] = useState<number | null>(null);
   const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
 
@@ -185,13 +192,15 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     try {
       const roomRef = doc(db, 'rooms', roomId);
 
-      // Case 1: Game hasn't started and we exit
-      if (room.status === 'waiting') {
+      // Case 1: Game hasn't started or is finished, and we exit
+      if (room.status === 'waiting' || room.status === 'finished') {
         const updates: any = {};
         if (room.players.black === userId) {
           updates['players.black'] = null;
+          updates['playerReady.black'] = false;
         } else if (room.players.white === userId) {
           updates['players.white'] = null;
+          updates['playerReady.white'] = false;
         }
 
         // If both slots will be empty, delete room
@@ -394,8 +403,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         moves: [...room.moves, newMove]
       });
 
-      // Post dynamic system chat log
-      await postSystemChat(`${nickname} ({myRole.label}) 在 (${x + 1}, ${y + 1}) 落下了一子`);
+
     } catch (err) {
       console.error('Error placing stone:', err);
     }
@@ -431,10 +439,10 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         updates.status = 'finished';
         updates.winner = opponentColor;
         updates.winnerReason = '由于对方时间用尽（超时判负）而获胜';
-        await postSystemChat(`⏰ 时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}超时损失最后一颗生命值。游戏结束！${opponentColor === 'black' ? '黑方' : '白方'}获胜！`);
+        await postSystemChat(`时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}超时损失最后一颗生命值。游戏结束！${opponentColor === 'black' ? '黑方' : '白方'}获胜！`);
       } else {
         // Keeps same player turn! Timeout deducts life and refreshes clock, but they still have to play.
-        await postSystemChat(`⏰ 时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}每步限时与读秒耗尽，失去 1 点生命。重置读秒，请尽快落子！`);
+        await postSystemChat(`时间到！${timedOutPlayer === 'black' ? '黑方' : '白方'}每步限时与读秒耗尽，失去 1 点生命。重置读秒，请尽快落子！`);
       }
 
       await updateDoc(roomRef, updates);
@@ -467,7 +475,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
       }
     }).catch(err => console.error('Error starting declaration:', err));
 
-    postSystemChat(`📢 [共圆宣言] ${nickname} ({myRole.label}) 发起了“共圆！”宣言！计时暂停。`);
+    postSystemChat(`[共圆宣言] ${nickname} 发起了“共圆！”宣言！计时暂停。`);
   };
 
   // Cancel declaration
@@ -488,7 +496,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         lastMoveTime: resumedLastMoveTime
       });
 
-      await postSystemChat(`📢 ${nickname} 取消了共圆宣言。计时恢复，回到落子决策中。`);
+      await postSystemChat(`${nickname} 取消了共圆宣言。计时恢复，回到落子决策中。`);
     } catch (err) {
       console.error('Error cancelling declaration:', err);
     }
@@ -568,9 +576,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
           updates.status = 'finished';
           updates.winner = myRole.color;
           updates.winnerReason = '通过精准的 [共圆宣言] 扣除对方最后一滴生命值获胜';
-          await postSystemChat(`✅ 宣言成功！四点 (${p1.x+1}, ${p1.y+1}), (${p2.x+1}, ${p2.y+1}), (${p3.x+1}, ${p3.y+1}), (${p4.x+1}, ${p4.y+1}) 处于共圆上！${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，生命值为0。游戏结束！${myRole.color === 'black' ? '黑方' : '白方'}在共圆宣告中大获全胜！`);
+          await postSystemChat(`宣言成功！四点 (${p1.x+1}, ${p1.y+1}), (${p2.x+1}, ${p2.y+1}), (${p3.x+1}, ${p3.y+1}), (${p4.x+1}, ${p4.y+1}) 处于共圆上！${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，生命值为0。游戏结束！${myRole.color === 'black' ? '黑方' : '白方'}在共圆宣告中大获全胜！`);
         } else {
-          await postSystemChat(`✅ 宣言成功！四点共圆成立！${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，上一步落子 (${p1.x+1}, ${p1.y+1}) 被移除，返还行棋权由 ${nickname} 继续落子！`);
+          await postSystemChat(`宣言成功！四点共圆成立！${opponentColor === 'black' ? '黑方' : '白方'}扣除1点生命，上一步落子 (${p1.x+1}, ${p1.y+1}) 被移除，返还行棋权由 ${nickname} 继续落子！`);
         }
 
         setDeclaring(false);
@@ -604,9 +612,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
           updates.status = 'finished';
           updates.winner = opponentColor;
           updates.winnerReason = '由于对方错误的 [共圆宣言] 消耗掉自我最后一手生命数而获胜';
-          await postSystemChat(`❌ 宣言失败！指定的4个点并不共圆。${myRole.color === 'black' ? '黑方' : '白方'}损失1点生命，生命值为0。游戏结束！${opponentColor === 'black' ? '黑方' : '白方'}获胜！`);
+          await postSystemChat(`宣言失败！指定的4个点并不共圆。${myRole.color === 'black' ? '黑方' : '白方'}损失1点生命，生命值为0。游戏结束！${opponentColor === 'black' ? '黑方' : '白方'}获胜！`);
         } else {
-          await postSystemChat(`❌ 宣言失败！指定的4个点不处于相同圆周，宣告不属实！${myRole.color === 'black' ? '黑方' : '白方'}损失 1 点生命值，交回行棋决策权并恢复倒计时！`);
+          await postSystemChat(`宣言失败！指定的4个点不处于相同圆周，宣告不属实！${myRole.color === 'black' ? '黑方' : '白方'}损失 1 点生命值，交回行棋决策权并恢复倒计时！`);
         }
 
         setDeclaring(false);
@@ -622,16 +630,21 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const handleToggleAllCircles = () => {
     if (!room) return;
     if (showAllConcyclic) {
-      setShowAllConcyclic(false);
-      setConcyclicGroups([]);
+      setSavedAnalysisByStep(prev => {
+        const copy = { ...prev };
+        delete copy[historyIndex];
+        return copy;
+      });
       setHoveredGroupIndex(null);
       setSelectedGroupIndex(null);
     } else {
       // Find all groups is computationally light because we only scan stonesOnBoard
       const coords = stonesOnBoard.map(s => ({ x: s.x, y: s.y }));
       const groups = findAllConcyclicGroups(coords);
-      setConcyclicGroups(groups);
-      setShowAllConcyclic(true);
+      setSavedAnalysisByStep(prev => ({
+        ...prev,
+        [historyIndex]: groups
+      }));
       if (groups.length === 0) {
         alert('复盘报告: 当前盘面未发现任何合法四点共圆组合！');
       }
@@ -666,9 +679,8 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
       });
 
       setHistoryIndex(0);
-      setShowAllConcyclic(false);
-      setConcyclicGroups([]);
-      await postSystemChat(`🔄 重新开局！双方重新进入备战状态。`);
+      setSavedAnalysisByStep({});
+      await postSystemChat(`重新开局！双方重新进入备战状态。`);
     } catch (err) {
       console.error('Error resetting game room:', err);
     }
@@ -785,8 +797,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
                 id="jump-to-latest"
                 onClick={() => {
                   setHistoryIndex(room.moves.length);
-                  setShowAllConcyclic(false);
-                  setConcyclicGroups([]);
                 }}
                 className="bg-black hover:bg-neutral-800 text-white font-mono font-black text-[9px] px-3 py-1.5 border border-black uppercase tracking-widest cursor-pointer shadow-[2px_2px_0px_rgba(255,255,255,0.2)]"
               >
