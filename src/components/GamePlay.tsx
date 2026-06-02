@@ -19,7 +19,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const [chatInput, setChatInput] = useState('');
   const [historyIndex, setHistoryIndex] = useState<number>(0);
   const [selectedDeclarationPoints, setSelectedDeclarationPoints] = useState<Point[]>([]);
-  const declaring = room?.activeDeclaration?.player === myRole.color;
 
   const [savedAnalysisByStep, setSavedAnalysisByStep] = useState<Record<number, ConcyclicGroup[]>>({});
   const concyclicGroups = savedAnalysisByStep[historyIndex] || [];
@@ -98,6 +97,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   };
 
   const myRole = getMyRole();
+  const declaring = room?.activeDeclaration?.player === myRole.color;
 
   // 3. Register self as white/black when entering room if slots are empty
   useEffect(() => {
@@ -405,9 +405,13 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     }
   };
 
+  const timeoutLock = useRef<number>(-1);
+
   // Timeout handler
   const handleTimeout = async (timedOutPlayer: PlayerColor) => {
     if (!room || room.status !== 'playing' || room.winner) return;
+    if (timeoutLock.current === room.moves.length) return;
+    timeoutLock.current = room.moves.length;
     
     const opponentColor = timedOutPlayer === 'black' ? 'white' : 'black';
     // To prevent duplicate timeout triggers from multiple clients, only the opponent is authorized to enforce the timeout.
@@ -472,25 +476,6 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     }).catch(err => console.error('Error starting declaration:', err));
 
     postSystemChat(`[共圆宣言] ${nickname} 发起了“共圆！”宣言！`);
-  };
-
-  // Cancel declaration
-  const handleCancelDeclaration = async () => {
-    if (!room || !room.activeDeclaration) return;
-    if (room.activeDeclaration.player !== myRole.color) return;
-
-    try {
-      setSelectedDeclarationPoints([]);
-
-      await updateDoc(doc(db, 'rooms', roomId), {
-        activeDeclaration: null,
-        lastMoveTime: room.lastMoveTime + (Date.now() - room.activeDeclaration.startedAt)
-      });
-
-      await postSystemChat(`${nickname} 取消了共圆宣言。`);
-    } catch (err) {
-      console.error('Error cancelling declaration:', err);
-    }
   };
 
   // Select stone during declaring concyclic
@@ -1448,16 +1433,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
                             id="confirm-declare"
                             onClick={handleConfirmDeclaration}
                             disabled={selectedDeclarationPoints.length !== 3}
-                            className="flex-1 bg-black text-white font-black hover:bg-neutral-800 py-3 text-[10px] uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer disabled:opacity-40"
+                            className="w-full bg-black text-white font-black hover:bg-neutral-800 py-3 text-[10px] uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer disabled:opacity-40"
                           >
                             确认选择并比对
-                          </button>
-                          <button
-                            id="cancel-declare"
-                            onClick={handleCancelDeclaration}
-                            className="bg-white hover:bg-neutral-100 text-black font-black py-3 px-4 text-[10px] uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
-                          >
-                            取消
                           </button>
                         </div>
                       </div>
@@ -1482,7 +1460,8 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
                           <button
                             id="declare-concyclic-trigger"
                             onClick={handleStartDeclaration}
-                            className="w-full py-3.5 bg-black hover:bg-neutral-800 text-white font-black border-2 border-black transition-all text-xs tracking-widest uppercase shadow-[3px_3px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+                            disabled={stonesOnBoard.length < 4}
+                            className="w-full py-3.5 bg-black hover:bg-neutral-800 text-white font-black border-2 border-black transition-all text-xs tracking-widest uppercase shadow-[3px_3px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             共圆！
                           </button>
