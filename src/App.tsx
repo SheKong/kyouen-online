@@ -19,9 +19,41 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
+    // Active pinging setup
+    let pingInterval: ReturnType<typeof setInterval>;
+    
+    const checkActualConnection = async () => {
+      if (!navigator.onLine) {
+        setIsOffline(true);
+        return;
+      }
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(window.location.origin + '/?ping=' + Date.now(), { 
+          method: 'HEAD', 
+          cache: 'no-store',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (res.status >= 200 && res.status < 400) {
+          setIsOffline(false);
+        } else {
+          setIsOffline(true);
+        }
+      } catch (err) {
+        setIsOffline(true);
+      }
+    };
+
+    pingInterval = setInterval(checkActualConnection, 3000);
+    checkActualConnection();
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(pingInterval);
     };
   }, []);
 

@@ -662,6 +662,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
       setHistoryIndex(0);
       setSavedAnalysisByStep({});
+      setSelectedDeclarationPoints([]);
+      setHoveredGroupIndex(null);
+      setSelectedGroupIndex(null);
       await postSystemChat(`重新开局！双方已交换黑白方，重新进入备战状态。`);
     } catch (err) {
       console.error('Error resetting game room:', err);

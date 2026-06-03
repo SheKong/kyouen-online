@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, setDoc, doc, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, setDoc, doc, orderBy, deleteDoc, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Room } from '../types';
 import { getOrCreateUserId, getOrCreateNickname, saveNickname } from '../utils/userId';
@@ -31,7 +31,8 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
 
   // Listen to active rooms
   useEffect(() => {
-    const roomsQuery = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
+    // Only query up to 50 recent rooms to prevent massive broadcast storms when many users are active
+    const roomsQuery = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'), limit(50));
     const unsubscribe = onSnapshot(roomsQuery, (snapshot) => {
       const roomList: Room[] = [];
       const now = Date.now();
@@ -195,9 +196,9 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
                 id="show-rules"
                 onClick={() => setShowRules(true)}
                 title="游戏规则"
-                className="text-neutral-500 hover:text-black cursor-pointer bg-neutral-100 hover:bg-neutral-200 rounded-full p-1 transition-colors ml-2"
+                className="text-[10px] text-neutral-500 hover:text-black cursor-pointer font-extrabold uppercase tracking-wider underline border-none bg-transparent ml-2"
               >
-                <HelpCircle size={14} className="stroke-[2.5]" />
+                [游戏规则/RULES]
               </button>
             </div>
           )}
@@ -230,7 +231,7 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
                 <li><strong className="text-black">时间限制：</strong>每回合有固定的思考时间，若思考时间耗尽则进入读秒，读秒耗尽将失去1点生命值。</li>
               </ul>
               <p className="pt-2 text-xs font-bold text-black border-t-2 border-black italic">
-                “保持敏锐的几何直觉，不要错过任何一个共圆的瞬间！”
+                特别地，4子共线算作在一个半径无限大的圆上。
               </p>
             </div>
             <button
@@ -438,23 +439,16 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
 
               <div>
                 <label className="block text-[10px] font-mono font-extrabold uppercase tracking-widest text-black/60 mb-1.5">棋盘规格 SIZE</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[9, 11, 13, 15].map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      id={`size-${size}`}
-                      onClick={() => setBoardSize(size)}
-                      className={`py-2 text-[10px] font-mono font-black border-2 transition-all cursor-pointer ${
-                        boardSize === size
-                          ? 'bg-black text-white border-black'
-                          : 'bg-white text-black border-black hover:bg-neutral-100'
-                      }`}
-                    >
-                      {size}×{size}
-                    </button>
+                <select
+                  id="board-size-select"
+                  className="w-full text-xs border-2 border-black bg-white px-3 py-2.5 outline-none focus:bg-neutral-50/50 font-black font-mono cursor-pointer"
+                  value={boardSize}
+                  onChange={(e) => setBoardSize(parseInt(e.target.value))}
+                >
+                  {[6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((size) => (
+                    <option key={size} value={size}>{size}×{size}</option>
                   ))}
-                </div>
+                </select>
               </div>
 
               <div>
@@ -489,23 +483,16 @@ export default function Lobby({ onJoinRoom }: LobbyProps) {
 
               <div>
                 <label className="block text-[10px] font-mono font-extrabold uppercase tracking-widest text-black/60 mb-1.5">健康生命 LIVES / HP</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[1, 3, 5, 10].map((lives) => (
-                    <button
-                      key={lives}
-                      type="button"
-                      id={`lives-${lives}`}
-                      onClick={() => setTotalLives(lives)}
-                      className={`py-2 text-[10px] font-mono font-black border-2 transition-all cursor-pointer ${
-                        totalLives === lives
-                          ? 'bg-black text-white border-black'
-                          : 'bg-white text-black border-black hover:bg-neutral-100'
-                      }`}
-                    >
-                      {lives} HP
-                    </button>
+                <select
+                  id="lives-select"
+                  className="w-full text-xs border-2 border-black bg-white px-3 py-2.5 outline-none focus:bg-neutral-50/50 font-black font-mono cursor-pointer"
+                  value={totalLives}
+                  onChange={(e) => setTotalLives(parseInt(e.target.value))}
+                >
+                  {[1, 2, 3, 4, 5].map((lives) => (
+                    <option key={lives} value={lives}>{lives} HP</option>
                   ))}
-                </div>
+                </select>
               </div>
 
               <button
