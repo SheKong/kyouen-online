@@ -1,20 +1,16 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# 共圆
 
-# Run and deploy your AI Studio app
+这是一个基于四点共圆几何规则设计的在线双人对弈棋类游戏。
 
-This contains everything you need to run your app locally.
+## 游戏简介
 
-View your app in AI Studio: https://ai.studio/apps/d3ce9a45-cd8c-4452-9116-e9eb65500587
+在经典的棋盘上网格交点处，两位玩家轮流落子。除了传统的行棋，游戏的核心在于“共圆”规则：当一方玩家落子后，若该棋子与棋盘上已有的任意三个棋子（不限颜色）能够组成一个几何学上的圆形（即四点共圆），对手或落子方可对该组合发起“共圆宣言”。
 
-## Run Locally
+## 核心功能
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- **在线双人对弈**：支持创建房间、通过房间码邀请好友加入或作为观众旁听，实现实时的跨端落子同步。
+- **共圆宣告系统**：在对方落子后，玩家可一键启动共圆研判，选择另外三个棋子进行判定。若判定制胜，将撤回对方的落子并惩罚其继续落子的回合。
+- **复盘工具与分析**：
+  - **历史进程回溯**：支持随时前进、后退到任意行棋步数，查看当时的局势。
+  - **全圆计算展示**：在复盘模式下点击“显示共圆”，系统能计算出当前盘面所有的四点共圆轨迹并高亮显示。
+  - **智能安全格判定**：开启共圆显示后，系统会运用高效的代数几何算法，将下在此处不会增加任何新共圆组合的网格交点以浅绿色高亮标出，辅助行棋决策。
