@@ -60,6 +60,11 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         }
         return prevIndex;
       });
+
+      // Clear analysis if this is a new game
+      if (data.moves.length === 0) {
+        setSavedAnalysisByStep({});
+      }
     }, (error) => {
       console.error('Error listening to room:', error);
     });
@@ -154,11 +159,19 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
       setLocalByoyomiTime(byoyomiTimeLeft);
 
       // Timeout execution guard!
-      // Only the active player or opponent handles triggering, let's have the active player trigger if they can,
-      // or the opponent triggers if the local clock sees the other player is completely out.
+      // Only the active player or opponent handles triggering.
+      // To prevent strict network latency bugs where a player played at the last second
+      // but their connection lagged, we wait an extra grace period (e.g., 3s)
+      // before actually enforcing the timeout.
       if (byoyomiTimeLeft === 0) {
-        clearInterval(interval);
-        handleTimeout(room.turn);
+        // Visual timer shows 0, but logical timeout adds a small grace period for remote network sync
+        const totalBudgetSec = room.stepTime + room.playerByoyomi[room.turn];
+        const GRACE_PERIOD_SEC = 3;
+        
+        if (totalElapsedSec >= totalBudgetSec + GRACE_PERIOD_SEC) {
+          clearInterval(interval);
+          handleTimeout(room.turn);
+        }
       }
     }, 200);
 
