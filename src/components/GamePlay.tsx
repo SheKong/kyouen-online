@@ -362,15 +362,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
   // Find last played move in the current displayed history
   const getLastPlayedMove = (): Move | null => {
-    if (!room || historyIndex === 0) return null;
-    // Iterate backwards from historyIndex-1 to find the latest 'play' move
-    for (let i = historyIndex - 1; i >= 0; i--) {
-      const m = room.moves[i];
-      if (m && m.type === 'play') {
-        return m;
-      }
-    }
-    return null;
+    if (!room || historyIndex === 0 || stonesOnBoard.length === 0) return null;
+    const lastStone = stonesOnBoard[stonesOnBoard.length - 1];
+    return room.moves[lastStone.originalMoveIndex] || null;
   };
 
   const lastMove = getLastPlayedMove();
