@@ -134,3 +134,112 @@ export function findAllConcyclicGroups(points: Point[]): { points: Point[]; type
 
   return results;
 }
+
+function gcd2(a: number, b: number): number {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  while (b) { let temp = b; b = a % b; a = temp; }
+  return a;
+}
+
+function gcd4(a: number, b: number, c: number, d: number): number {
+  return gcd2(gcd2(a, b), gcd2(c, d));
+}
+
+// Compute safe grid intersections that won't form any new concyclic group of 4
+export function calculateSafeCells(stones: Point[], N: number): Point[] {
+  const circles = new Set<string>();
+  const n = stones.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      for (let k = j + 1; k < n; k++) {
+        const s1 = stones[i];
+        const s2 = stones[j];
+        const s3 = stones[k];
+        
+        const x1 = s1.x, y1 = s1.y, z1 = x1*x1 + y1*y1;
+        const x2 = s2.x, y2 = s2.y, z2 = x2*x2 + y2*y2;
+        const x3 = s3.x, y3 = s3.y, z3 = x3*x3 + y3*y3;
+        
+        let A = x1*(y2 - y3) - y1*(x2 - x3) + (x2*y3 - y2*x3);
+        let B = y1*(z2 - z3) - z1*(y2 - y3) + (y2*z3 - z2*y3);
+        let C = x1*(z2 - z3) - z1*(x2 - x3) + (x2*z3 - z2*x3);
+        let D = x1*(y2*z3 - z2*y3) - y1*(x2*z3 - z2*x3) + z1*(x2*y3 - y2*x3);
+        
+        C = -C;
+        D = -D;
+        
+        if (A === 0 && B === 0 && C === 0) continue;
+        
+        let g = gcd4(A, B, C, D);
+        if (g !== 0) {
+          A /= g; B /= g; C /= g; D /= g;
+        }
+        if (A < 0 || (A === 0 && B < 0) || (A === 0 && B === 0 && C < 0)) {
+          A = -A; B = -B; C = -C; D = -D;
+        }
+        circles.add(`${A}_${B}_${C}_${D}`);
+      }
+    }
+  }
+  
+  const dangerous = new Uint8Array(N * N);
+  for (const stone of stones) {
+    dangerous[stone.y * N + stone.x] = 1;
+  }
+  
+  for (const circleStr of circles) {
+    const parts = circleStr.split('_');
+    const A = parseInt(parts[0], 10);
+    const B = parseInt(parts[1], 10);
+    const C = parseInt(parts[2], 10);
+    const D = parseInt(parts[3], 10);
+    
+    if (A === 0 && C === 0) {
+      if (B !== 0 && (-D) % B === 0) {
+         const x = (-D) / B;
+         if (x >= 0 && x < N) {
+           for (let y = 0; y < N; y++) dangerous[y * N + x] = 1;
+         }
+      }
+      continue;
+    }
+    
+    for (let x = 0; x < N; x++) {
+      const E = A * x * x + B * x + D;
+      if (A === 0) {
+        if (C !== 0 && (-E) % C === 0) {
+          const y = (-E) / C;
+          if (y >= 0 && y < N) dangerous[y * N + x] = 1;
+        }
+      } else {
+        const delta = C * C - 4 * A * E;
+        if (delta >= 0) {
+          const s = Math.round(Math.sqrt(delta));
+          if (s * s === delta) {
+            const y1 = -C + s;
+            if (y1 % (2 * A) === 0) {
+              const y = y1 / (2 * A);
+              if (y >= 0 && y < N) dangerous[y * N + x] = 1;
+            }
+            const y2 = -C - s;
+            if (y2 % (2 * A) === 0) {
+              const y = y2 / (2 * A);
+              if (y >= 0 && y < N) dangerous[y * N + x] = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  const safeCells: Point[] = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (dangerous[r * N + c] === 0) {
+        safeCells.push({ x: c, y: r });
+      }
+    }
+  }
+  return safeCells;
+}

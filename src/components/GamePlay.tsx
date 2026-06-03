@@ -3,7 +3,7 @@ import { doc, onSnapshot, updateDoc, setDoc, deleteDoc, collection, query, order
 import { db } from '../firebase';
 import { Room, ChatMessage, Move, Point, ConcyclicGroup, PlayerColor } from '../types';
 import { getOrCreateUserId, getOrCreateNickname } from '../utils/userId';
-import { checkConcyclic, calculateCircle, findAllConcyclicGroups, areFourCollinear } from '../utils/math';
+import { checkConcyclic, calculateCircle, findAllConcyclicGroups, areFourCollinear, calculateSafeCells } from '../utils/math';
 import { Heart, Send, CornerDownLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MessageSquare, AlertCircle, Play, Info, Crown, Users } from 'lucide-react';
 
 interface GamePlayProps {
@@ -21,7 +21,9 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   const [selectedDeclarationPoints, setSelectedDeclarationPoints] = useState<Point[]>([]);
 
   const [savedAnalysisByStep, setSavedAnalysisByStep] = useState<Record<number, ConcyclicGroup[]>>({});
+  const [savedSafeCellsByStep, setSavedSafeCellsByStep] = useState<Record<number, Point[]>>({});
   const concyclicGroups = savedAnalysisByStep[historyIndex] || [];
+  const safeCells = savedSafeCellsByStep[historyIndex] || [];
   const showAllConcyclic = savedAnalysisByStep[historyIndex] !== undefined;
 
   // Reset hover and selected indicators when history index changes
@@ -64,6 +66,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
       // Clear analysis if this is a new game
       if (data.moves.length === 0) {
         setSavedAnalysisByStep({});
+        setSavedSafeCellsByStep({});
       }
     }, (error) => {
       console.error('Error listening to room:', error);
@@ -368,6 +371,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
   };
 
   const lastMove = getLastPlayedMove();
+  const absoluteLastMove = room?.moves[room.moves.length - 1];
 
   // Handle Board Intersection Point Click
   const handleIntersectionClick = async (x: number, y: number) => {
@@ -466,7 +470,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
     if (!room || room.status !== 'playing' || room.winner || room.activeDeclaration) return;
     if (!myRole.isPlayer || myRole.color !== room.turn) return; // Only active player can declare based on the opponent's last move
 
-    if (!lastMove || lastMove.player === myRole.color) {
+    if (!absoluteLastMove || absoluteLastMove.type !== 'play' || absoluteLastMove.player === myRole.color) {
       alert('无法宣言：对方尚未下子，或者上一步并非是对方的落子！');
       return;
     }
@@ -612,15 +616,26 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
         delete copy[historyIndex];
         return copy;
       });
+      setSavedSafeCellsByStep(prev => {
+        const copy = { ...prev };
+        delete copy[historyIndex];
+        return copy;
+      });
       setHoveredGroupIndex(null);
       setSelectedGroupIndex(null);
     } else {
       // Find all groups is computationally light because we only scan stonesOnBoard
       const coords = stonesOnBoard.map(s => ({ x: s.x, y: s.y }));
       const groups = findAllConcyclicGroups(coords);
+      const computedSafeCells = calculateSafeCells(coords, room.size);
+      
       setSavedAnalysisByStep(prev => ({
         ...prev,
         [historyIndex]: groups
+      }));
+      setSavedSafeCellsByStep(prev => ({
+        ...prev,
+        [historyIndex]: computedSafeCells
       }));
     }
   };
@@ -656,6 +671,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
 
       setHistoryIndex(0);
       setSavedAnalysisByStep({});
+      setSavedSafeCellsByStep({});
       setSelectedDeclarationPoints([]);
       setHoveredGroupIndex(null);
       setSelectedGroupIndex(null);
@@ -1008,6 +1024,19 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
                 }
                 return null;
               })()}
+
+              {/* Safe Cells */}
+              {safeCells.map((pt, idx) => (
+                <rect
+                  key={`safe-${idx}`}
+                  x={margin + pt.x * gridSpan - gridSpan * 0.35}
+                  y={margin + pt.y * gridSpan - gridSpan * 0.35}
+                  width={gridSpan * 0.7}
+                  height={gridSpan * 0.7}
+                  fill="rgba(16, 185, 129, 0.4)"
+                  pointerEvents="none"
+                />
+              ))}
 
               {/* Hover Intersect Preview Dot (Only on matching user turn and active view index) */}
               {isPlayState && myRole.color === room.turn && historyIndex === room.moves.length && !room.activeDeclaration && (
@@ -1468,7 +1497,7 @@ export default function GamePlay({ roomId, onExit }: GamePlayProps) {
                         </p>
 
                         {/* Declare Concyclic Trigger buttons */}
-                        {lastMove && lastMove.player !== myRole.color && (
+                        {lastMove && absoluteLastMove?.type === 'play' && absoluteLastMove.player !== myRole.color && (
                           <button
                             id="declare-concyclic-trigger"
                             onClick={handleStartDeclaration}
